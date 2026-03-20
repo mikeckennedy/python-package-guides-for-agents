@@ -14,21 +14,6 @@ AI coding agents are incredible, but they have a documentation problem:
 
 These guides solve all three problems. Each one was created by downloading the **latest source code and documentation** for a package, deeply parsing both, cross-referencing the docs against the actual implementation, and distilling the result into a single, agent-friendly markdown file. This has saved us many bugs before we even started coding.
 
-## What's included
-
-| Guide | Package | Version | Lines | Description |
-|-------|---------|---------|------:|-------------|
-| [flask_reference.md](package-guides/flask_reference.md) | Flask | latest | ~2,100 | The classic Python web micro-framework |
-| [quart_reference.md](package-guides/quart_reference.md) | Quart | latest | ~2,160 | Async Flask-compatible web framework |
-| [robyn-reference.md](package-guides/robyn-reference.md) | Robyn | latest | ~690 | High-performance Python-Rust web framework |
-| [pymongo_reference.md](package-guides/pymongo_reference.md) | PyMongo | 4.x | ~2,530 | MongoDB driver for Python |
-| [tenacity_reference.md](package-guides/tenacity_reference.md) | Tenacity | latest | ~1,200 | Retry library for Python |
-| [diskcache_reference.md](package-guides/diskcache_reference.md) | DiskCache | 5.6.3 | ~1,230 | Disk-backed cache using SQLite |
-| [dataclasswizard_reference.md](package-guides/dataclasswizard_reference.md) | Dataclass Wizard | 0.39.1 | ~1,510 | Dataclass serialization/deserialization |
-| [chameleon-flask_reference.md](package-guides/chameleon-flask_reference.md) | chameleon-flask | 0.6.0 | ~780 | Chameleon template engine integration for Flask |
-| [chameleon-partials_reference.md](package-guides/chameleon-partials_reference.md) | chameleon_partials | 0.1.0 | ~770 | Partial template rendering for Chameleon |
-| [content-types_reference.md](package-guides/content-types_reference.md) | content-types | latest | ~690 | MIME type detection and content type mapping |
-
 ## How to use these guides
 
 This repo is **not** meant to be cloned and used as-is. It's a library you pick from. The workflow:
@@ -39,6 +24,27 @@ This repo is **not** meant to be cloned and used as-is. It's a library you pick 
 4. **Code with confidence** — fewer hallucinated APIs, fewer runtime surprises
 
 The guides live in your repo alongside your code, so your agent always has them in reach without searching the web or relying on training data.
+
+## What's included
+
+| Guide | Package | Version | Lines | Description |
+|-------|---------|---------|------:|-------------|
+| [django_reference.md](package-guides/django_reference.md) | Django | 6.1 | ~2,480 | The batteries-included Python web framework |
+| [pydantic_reference.md](package-guides/pydantic_reference.md) | Pydantic | 2.13.x | ~2,190 | Data validation and settings management using Python type hints |
+| [flask_reference.md](package-guides/flask_reference.md) | Flask | latest | ~2,100 | The classic Python web micro-framework |
+| [quart_reference.md](package-guides/quart_reference.md) | Quart | latest | ~2,160 | Async Flask-compatible web framework |
+| [robyn-reference.md](package-guides/robyn-reference.md) | Robyn | latest | ~690 | High-performance Python-Rust web framework |
+| [pymongo_reference.md](package-guides/pymongo_reference.md) | PyMongo | 4.x | ~2,530 | MongoDB driver for Python |
+| [tenacity_reference.md](package-guides/tenacity_reference.md) | Tenacity | latest | ~1,200 | Retry library for Python |
+| [diskcache_reference.md](package-guides/diskcache_reference.md) | DiskCache | 5.6.3 | ~1,230 | Disk-backed cache using SQLite |
+| [dataclasswizard_reference.md](package-guides/dataclasswizard_reference.md) | Dataclass Wizard | 0.39.1 | ~1,510 | Dataclass serialization/deserialization |
+| [chameleon-flask_reference.md](package-guides/chameleon-flask_reference.md) | chameleon-flask | 0.6.0 | ~780 | Chameleon template engine integration for Flask |
+| [chameleon-partials_reference.md](package-guides/chameleon-partials_reference.md) | chameleon_partials | 0.1.0 | ~770 | Partial template rendering for Chameleon |
+| [fastapi_reference.md](package-guides/fastapi_reference.md) | FastAPI | latest | ~1,930 | Modern async web framework with automatic OpenAPI docs |
+| [loguru_reference.md](package-guides/loguru_reference.md) | Loguru | 0.7.3 | ~1,280 | Enjoyable, no-boilerplate logging for Python |
+| [nicegui_reference.md](package-guides/nicegui_reference.md) | NiceGUI | latest | ~2,570 | Python UI framework built on FastAPI, Vue 3, and Quasar |
+| [content-types_reference.md](package-guides/content-types_reference.md) | content-types | latest | ~690 | MIME type detection and content type mapping |
+
 
 ### Claude Code
 
