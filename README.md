@@ -27,25 +27,27 @@ The guides live in your repo alongside your code, so your agent always has them 
 
 ## What's included
 
-| Guide | Package | Version | Lines | Description |
-|-------|---------|---------|------:|-------------|
-| [django_reference.md](package-guides/django_reference.md) | Django | 6.1 | ~2,480 | The batteries-included Python web framework |
-| [pydantic_reference.md](package-guides/pydantic_reference.md) | Pydantic | 2.13.x | ~2,190 | Data validation and settings management using Python type hints |
-| [flask_reference.md](package-guides/flask_reference.md) | Flask | latest | ~2,100 | The classic Python web micro-framework |
-| [quart_reference.md](package-guides/quart_reference.md) | Quart | latest | ~2,160 | Async Flask-compatible web framework |
-| [pyramid_reference.md](package-guides/pyramid_reference.md) | Pyramid | 2.1 | ~2,480 | Flexible, full-featured Python web framework |
-| [robyn-reference.md](package-guides/robyn-reference.md) | Robyn | latest | ~690 | High-performance Python-Rust web framework |
-| [pymongo_reference.md](package-guides/pymongo_reference.md) | PyMongo | 4.x | ~2,530 | MongoDB driver for Python |
-| [mongoengine_reference.md](package-guides/mongoengine_reference.md) | MongoEngine | 0.29.0 | ~1,600 | Python Object-Document Mapper (ODM) for MongoDB |
-| [tenacity_reference.md](package-guides/tenacity_reference.md) | Tenacity | latest | ~1,200 | Retry library for Python |
-| [diskcache_reference.md](package-guides/diskcache_reference.md) | DiskCache | 5.6.3 | ~1,230 | Disk-backed cache using SQLite |
-| [dataclasswizard_reference.md](package-guides/dataclasswizard_reference.md) | Dataclass Wizard | 0.39.1 | ~1,510 | Dataclass serialization/deserialization |
-| [chameleon-flask_reference.md](package-guides/chameleon-flask_reference.md) | chameleon-flask | 0.6.0 | ~780 | Chameleon template engine integration for Flask |
-| [chameleon-partials_reference.md](package-guides/chameleon-partials_reference.md) | chameleon_partials | 0.1.0 | ~770 | Partial template rendering for Chameleon |
-| [fastapi_reference.md](package-guides/fastapi_reference.md) | FastAPI | latest | ~1,930 | Modern async web framework with automatic OpenAPI docs |
-| [loguru_reference.md](package-guides/loguru_reference.md) | Loguru | 0.7.3 | ~1,280 | Enjoyable, no-boilerplate logging for Python |
-| [nicegui_reference.md](package-guides/nicegui_reference.md) | NiceGUI | latest | ~2,570 | Python UI framework built on FastAPI, Vue 3, and Quasar |
-| [content-types_reference.md](package-guides/content-types_reference.md) | content-types | latest | ~690 | MIME type detection and content type mapping |
+| Package | Version | Lines | Description |
+|---------|---------|------:|-------------|
+| [Django](package-guides/django_reference.md) | 6.1 | ~2,480 | The batteries-included Python web framework |
+| [Pydantic](package-guides/pydantic_reference.md) | 2.13.x | ~2,190 | Data validation and settings management using Python type hints |
+| [Flask](package-guides/flask_reference.md) | latest | ~2,100 | The classic Python web micro-framework |
+| [Quart](package-guides/quart_reference.md) | latest | ~2,160 | Async Flask-compatible web framework |
+| [Pyramid](package-guides/pyramid_reference.md) | 2.1 | ~2,480 | Flexible, full-featured Python web framework |
+| [Robyn](package-guides/robyn-reference.md) | latest | ~690 | High-performance Python-Rust web framework |
+| [PyMongo](package-guides/pymongo_reference.md) | 4.x | ~2,530 | MongoDB driver for Python |
+| [MongoEngine](package-guides/mongoengine_reference.md) | 0.29.0 | ~1,600 | Python Object-Document Mapper (ODM) for MongoDB |
+| [Tenacity](package-guides/tenacity_reference.md) | latest | ~1,200 | Retry library for Python |
+| [DiskCache](package-guides/diskcache_reference.md) | 5.6.3 | ~1,230 | Disk-backed cache using SQLite |
+| [Dataclass Wizard](package-guides/dataclasswizard_reference.md) | 0.39.1 | ~1,510 | Dataclass serialization/deserialization |
+| [chameleon-flask](package-guides/chameleon-flask_reference.md) | 0.6.0 | ~780 | Chameleon template engine integration for Flask |
+| [chameleon_partials](package-guides/chameleon-partials_reference.md) | 0.1.0 | ~770 | Partial template rendering for Chameleon |
+| [FastAPI](package-guides/fastapi_reference.md) | latest | ~1,930 | Modern async web framework with automatic OpenAPI docs |
+| [Loguru](package-guides/loguru_reference.md) | 0.7.3 | ~1,280 | Enjoyable, no-boilerplate logging for Python |
+| [NiceGUI](package-guides/nicegui_reference.md) | latest | ~2,570 | Python UI framework built on FastAPI, Vue 3, and Quasar |
+| [content-types](package-guides/content-types_reference.md) | latest | ~690 | MIME type detection and content type mapping |
+| [Docker](package-guides/docker_reference.md) | latest | ~2,230 | Container platform for building, shipping, and running applications |
+| [Granian](package-guides/granian_reference.md) | 2.7.2 | ~1,200 | Rust HTTP server for Python ASGI/RSGI/WSGI applications |
 
 
 ### Claude Code
