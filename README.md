@@ -33,8 +33,10 @@ The guides live in your repo alongside your code, so your agent always has them 
 | [pydantic_reference.md](package-guides/pydantic_reference.md) | Pydantic | 2.13.x | ~2,190 | Data validation and settings management using Python type hints |
 | [flask_reference.md](package-guides/flask_reference.md) | Flask | latest | ~2,100 | The classic Python web micro-framework |
 | [quart_reference.md](package-guides/quart_reference.md) | Quart | latest | ~2,160 | Async Flask-compatible web framework |
+| [pyramid_reference.md](package-guides/pyramid_reference.md) | Pyramid | 2.1 | ~2,480 | Flexible, full-featured Python web framework |
 | [robyn-reference.md](package-guides/robyn-reference.md) | Robyn | latest | ~690 | High-performance Python-Rust web framework |
 | [pymongo_reference.md](package-guides/pymongo_reference.md) | PyMongo | 4.x | ~2,530 | MongoDB driver for Python |
+| [mongoengine_reference.md](package-guides/mongoengine_reference.md) | MongoEngine | 0.29.0 | ~1,600 | Python Object-Document Mapper (ODM) for MongoDB |
 | [tenacity_reference.md](package-guides/tenacity_reference.md) | Tenacity | latest | ~1,200 | Retry library for Python |
 | [diskcache_reference.md](package-guides/diskcache_reference.md) | DiskCache | 5.6.3 | ~1,230 | Disk-backed cache using SQLite |
 | [dataclasswizard_reference.md](package-guides/dataclasswizard_reference.md) | Dataclass Wizard | 0.39.1 | ~1,510 | Dataclass serialization/deserialization |

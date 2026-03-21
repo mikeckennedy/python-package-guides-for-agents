@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(wc -l /Volumes/owc-envoy-ultra/github/mk/python-package-guides-for-agents/package-guides/*.md)"
+      "Bash(wc -l /Volumes/owc-envoy-ultra/github/mk/python-package-guides-for-agents/package-guides/*.md)",
+      "Bash(git -C /Volumes/owc-envoy-ultra/github/mk/python-package-guides-for-agents status --short)"
     ]
   }
 }
