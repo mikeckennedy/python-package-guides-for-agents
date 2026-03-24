@@ -51,6 +51,7 @@ The guides live in your repo alongside your code, so your agent always has them 
 | [HTTPX](package-guides/httpx_reference.md) | 0.28.1 | ~1,640 | Modern async/sync HTTP client for Python |
 | [listmonk](package-guides/listmonk_reference.md) | latest | ~860 | Python client for the self-hosted Listmonk email platform |
 | [Granian](package-guides/granian_reference.md) | 2.7.2 | ~1,200 | Rust HTTP server for Python ASGI/RSGI/WSGI applications |
+| [markdown2](package-guides/markdown2_reference.md) | latest | ~970 | Fast, complete Python Markdown-to-HTML converter with 30+ extras |
 
 
 ### Claude Code
