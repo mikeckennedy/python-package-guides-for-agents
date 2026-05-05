@@ -47,6 +47,7 @@ The guides live in your repo alongside your code, so your agent always has them 
 | [NiceGUI](package-guides/nicegui_reference.md) | latest | ~2,570 | Python UI framework built on FastAPI, Vue 3, and Quasar |
 | [content-types](package-guides/content-types_reference.md) | latest | ~690 | MIME type detection and content type mapping |
 | [Docker](package-guides/docker_reference.md) | latest | ~2,230 | Container platform for building, shipping, and running applications |
+| [Stripe](package-guides/stripe_reference.md) | 15.1.0 | ~1,420 | Official Stripe Python SDK for payments, billing, subscriptions, and Connect |
 | [discord.py](package-guides/discordpy_reference.md) | 2.8.0a | ~2,180 | Feature-rich Discord API wrapper for Python |
 | [HTTPX](package-guides/httpx_reference.md) | 0.28.1 | ~1,640 | Modern async/sync HTTP client for Python |
 | [listmonk](package-guides/listmonk_reference.md) | latest | ~860 | Python client for the self-hosted Listmonk email platform |
