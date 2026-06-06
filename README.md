@@ -51,6 +51,7 @@ The guides live in your repo alongside your code, so your agent always has them 
 | [discord.py](package-guides/discordpy_reference.md) | 2.8.0a | ~2,180 | Feature-rich Discord API wrapper for Python |
 | [HTTPX](package-guides/httpx_reference.md) | 0.28.1 | ~1,640 | Modern async/sync HTTP client for Python |
 | [listmonk](package-guides/listmonk_reference.md) | latest | ~860 | Python client for the self-hosted Listmonk email platform |
+| [Umami](package-guides/umami_reference.md) | v2.x/v3.x | ~1,290 | HTTP API for the privacy-focused web analytics platform — stats, reports, events, and ingestion |
 | [Granian](package-guides/granian_reference.md) | 2.7.2 | ~1,200 | Rust HTTP server for Python ASGI/RSGI/WSGI applications |
 | [markdown2](package-guides/markdown2_reference.md) | latest | ~970 | Fast, complete Python Markdown-to-HTML converter with 30+ extras |
 | [Bulma](package-guides/bulma_reference.md) | 1.0.4 | ~1,510 | Modern CSS framework based on Flexbox with built-in dark mode and theming |
