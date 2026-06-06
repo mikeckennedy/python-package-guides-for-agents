@@ -1,6 +1,6 @@
 # Umami Analytics API — Comprehensive Reference
 
-> Umami is a privacy-focused, open-source web analytics platform (a Google Analytics alternative). Everything you can do in the Umami dashboard is available over a JSON HTTP API: managing websites, users, and teams; pulling stats, metrics, sessions, and event data; running attribution/funnel/journey/retention/revenue reports; and ingesting page views and custom events from any backend. This guide documents the full HTTP surface so you can build a client against it in any language. The official clients are JavaScript/TypeScript (`@umami/api-client`, `@umami/node`); there is no official Python SDK, so the Python examples here build directly on the REST API.
+> Umami is a privacy-focused, open-source web analytics platform (a Google Analytics alternative). Everything you can do in the Umami dashboard is available over a JSON HTTP API: managing websites, users, and teams; pulling stats, metrics, sessions, and event data; running attribution/funnel/journey/retention/revenue reports; and ingesting page views and custom events from any backend. This guide documents the full HTTP surface so you can build a client against it in any language. The official clients are JavaScript/TypeScript (`@umami/api-client`, `@umami/node`); for Python, the community `umami-analytics` package wraps the most common calls, and this guide documents the full REST surface so you can reach everything beyond that.
 
 > Verified against the official Umami API documentation (`api.umami.is`), API changelog through **2026-05-28**. Applies to self-hosted Umami **v2.x / v3.x** and **Umami Cloud**. All data is returned as JSON.
 
@@ -22,7 +22,7 @@
   - [Time unit buckets](#time-unit-buckets)
   - [Enums & magic numbers](#enums--magic-numbers)
 - [Quick start (Python)](#quick-start-python)
-- [Building a Python client](#building-a-python-client)
+- [Python client: umami-analytics](#python-client-umami-analytics)
 - [Endpoint reference](#endpoint-reference)
   - [Authentication endpoints](#authentication-endpoints)
   - [Me](#me)
@@ -330,127 +330,91 @@ print(websites["data"])
 
 ---
 
-## Building a Python client
+## Python client: `umami-analytics`
 
-A small wrapper handles both auth modes, the `/v1` base difference, token re-auth, and the millisecond/ISO date split. This is a solid starting point for a real client.
+For Python, the community **[`umami-analytics`](https://github.com/mikeckennedy/umami-python)** package (by Michael Kennedy) is the most direct way in. It's built on `httpx` and `pydantic`, ships **sync and async** variants of every networked call (`func()` and `func_async()`), and deliberately wraps the **subset most apps need** — sending events/page views/revenue, listing websites, summarized stats, active users, and auth. Configuration and the auth token are held at module level, so most calls take no boilerplate.
 
-```python
-from __future__ import annotations
-
-import time
-from datetime import datetime, timezone
-from typing import Any
-
-import requests
-
-
-def to_ms(dt: datetime) -> int:
-    """Convert a datetime to the Unix-millisecond form GET endpoints expect."""
-    return int(dt.timestamp() * 1000)
-
-
-def to_iso(dt: datetime) -> str:
-    """Convert a datetime to the ISO string form POST /reports endpoints expect."""
-    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-class UmamiClient:
-    """Minimal Umami HTTP client for self-hosted (token) or Cloud (API key)."""
-
-    def __init__(
-        self,
-        base_url: str,
-        *,
-        api_key: str | None = None,
-        username: str | None = None,
-        password: str | None = None,
-        session: requests.Session | None = None,
-    ) -> None:
-        self.base_url = base_url.rstrip("/")
-        self._api_key = api_key
-        self._username = username
-        self._password = password
-        self._token: str | None = None
-        self.session = session or requests.Session()
-
-    # -- auth ---------------------------------------------------------------
-    def login(self) -> None:
-        """Authenticate a self-hosted instance and cache the bearer token."""
-        resp = self.session.post(
-            f"{self.base_url}/auth/login",
-            json={"username": self._username, "password": self._password},
-        )
-        resp.raise_for_status()
-        self._token = resp.json()["token"]
-
-    def _headers(self) -> dict[str, str]:
-        if self._api_key:
-            return {"x-umami-api-key": self._api_key}
-        if self._token is None:
-            self.login()
-        return {"Authorization": f"Bearer {self._token}"}
-
-    # -- core request -------------------------------------------------------
-    def request(self, method: str, path: str, **kwargs: Any) -> Any:
-        url = f"{self.base_url}/{path.lstrip('/')}"
-        resp = self.session.request(method, url, headers=self._headers(), **kwargs)
-
-        # Token expired on a self-hosted instance? Re-auth once and retry.
-        if resp.status_code in (401, 403) and not self._api_key:
-            self.login()
-            resp = self.session.request(method, url, headers=self._headers(), **kwargs)
-
-        # Respect the Cloud rate limit (50 calls / 15s).
-        if resp.status_code == 429:
-            time.sleep(float(resp.headers.get("Retry-After", 15)))
-            resp = self.session.request(method, url, headers=self._headers(), **kwargs)
-
-        resp.raise_for_status()
-        return resp.json() if resp.content else None
-
-    def get(self, path: str, params: dict | None = None) -> Any:
-        return self.request("GET", path, params=params)
-
-    def post(self, path: str, json: dict | list | None = None) -> Any:
-        return self.request("POST", path, json=json)
-
-    def delete(self, path: str) -> Any:
-        return self.request("DELETE", path)
-
-    # -- a few typed helpers ------------------------------------------------
-    def websites(self, **params: Any) -> dict:
-        return self.get("/websites", params=params)
-
-    def website_stats(self, website_id: str, start: datetime, end: datetime, **filters: Any) -> dict:
-        return self.get(
-            f"/websites/{website_id}/stats",
-            params={"startAt": to_ms(start), "endAt": to_ms(end), **filters},
-        )
-
-    def run_report(self, report_type: str, website_id: str, parameters: dict, filters: dict | None = None) -> Any:
-        return self.post(
-            f"/reports/{report_type}",
-            json={
-                "websiteId": website_id,
-                "type": report_type,
-                "filters": filters or {},
-                "parameters": parameters,
-            },
-        )
-
-
-# Self-hosted
-client = UmamiClient(
-    "https://your-umami.example.com/api",
-    username="admin",
-    password="your-password",
-)
-
-# Umami Cloud
-cloud = UmamiClient("https://api.umami.is/v1", api_key="your-api-key")
+```bash
+pip install umami-analytics
 ```
 
-The official JS client returns a uniform `{ ok, status, data?, error? }` envelope. If you want the same ergonomics in Python, wrap `request()` to catch `requests.HTTPError` and return a result object instead of raising.
+```python
+import umami
+
+umami.set_url_base("https://your-umami.example.com")   # base WITHOUT the trailing /api
+login = umami.login("admin", "your-password")           # not required just to send events
+umami.set_website_id("your-website-id")                 # default for subsequent calls
+umami.set_hostname("example.com")                       # default hostname
+
+# Send a custom event (no login required). distinct_id maps to the payload `id`.
+umami.new_event(
+    event_name="purchase-course",
+    url="/checkout/complete",
+    custom_data={"course": "python-101"},
+    distinct_id="user-123",
+)
+
+# Track revenue — wraps new_event() and adds revenue/currency to the event data.
+umami.new_revenue_event(revenue=19.99, currency="USD", event_name="checkout", url="/checkout")
+
+# Record a page view.
+umami.new_page_view(page_title="Dashboard", url="/dashboard", distinct_id="user-123")
+
+# Pull summarized stats: datetimes in, a typed pydantic model out.
+from datetime import datetime, timedelta
+end = datetime.now()
+stats = umami.website_stats(start_at=end - timedelta(days=7), end_at=end)
+print(stats.pageviews, stats.visitors, stats.bounces)
+
+print(umami.active_users())   # -> int
+print(umami.websites())       # -> list[Website] (pydantic models)
+```
+
+Coverage map (every networked call also has an `_async` twin, e.g. `new_event_async`):
+
+| Function | Endpoint | Notes |
+| --- | --- | --- |
+| `set_url_base` / `set_website_id` / `set_hostname` | — | Module-level config and defaults. |
+| `enable()` / `disable()` | — | Toggle tracking; when disabled, `new_*` calls no-op (still validate). |
+| `login(username, password)` | `POST /api/auth/login` | Caches the bearer token; returns a `LoginResponse` with `.token`. |
+| `verify_token(check_server=True)` | `POST /api/auth/verify` | Returns `bool`. |
+| `is_logged_in()` | — | Whether a token is cached. |
+| `websites()` | `GET /api/websites` | Returns `list[Website]`. |
+| `website_stats(start_at, end_at, ...)` | `GET /api/websites/:id/stats` | `datetime` args; returns a `WebsiteStats` model. Optional filter kwargs. |
+| `active_users()` | `GET /api/websites/:id/active` | Returns `int`. |
+| `new_event(event_name, url, ...)` | `POST /api/send` (`type=event`) | Custom event; no auth needed. `distinct_id` → payload `id`. |
+| `new_page_view(page_title, url, ...)` | `POST /api/send` | Page view (no event name). |
+| `new_revenue_event(revenue, currency, ...)` | `POST /api/send` | Adds `revenue`/`currency` to the event data. |
+| `heartbeat()` | `POST /api/heartbeat` | Server-reachability check. |
+
+**Beyond the wrapped subset** — reports, sessions, event data, metrics/pageview series, realtime, teams, users, links, pixels, and share pages — call the HTTP API directly. After `umami.login(...)` you already have a token; a thin helper plus the two date converters (for the [ms-vs-ISO split](#two-date-conventions-read-this)) is all you need:
+
+```python
+import httpx
+from datetime import datetime, timezone
+
+BASE = "https://your-umami.example.com/api"          # or https://api.umami.is/v1 on Cloud
+HEADERS = {"Authorization": f"Bearer {login.token}"}  # from umami.login(...) above
+# On Umami Cloud instead: HEADERS = {"x-umami-api-key": "your-api-key"}
+
+def to_ms(dt: datetime) -> int:
+    """GET stats/sessions/events/revenue endpoints want Unix milliseconds."""
+    return int(dt.timestamp() * 1000)
+
+def to_iso(dt: datetime) -> str:
+    """POST /reports/* endpoints want ISO strings inside `parameters`."""
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+def api_get(path: str, **params):
+    r = httpx.get(f"{BASE}{path}", headers=HEADERS, params=params, follow_redirects=True)
+    r.raise_for_status()
+    return r.json()
+
+def api_post(path: str, body):
+    r = httpx.post(f"{BASE}{path}", headers=HEADERS, json=body, follow_redirects=True)
+    r.raise_for_status()
+    return r.json()
+```
 
 ---
 
@@ -1153,38 +1117,39 @@ requests.post(
 
 ## Common patterns
 
-**Daily traffic summary (self-hosted).**
+These build on the `umami-analytics` setup and the `api_get` / `api_post` helpers from [Python client](#python-client-umami-analytics).
+
+**Daily traffic summary** — the library returns a typed model.
 
 ```python
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
-end = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+end = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 start = end - timedelta(days=1)
 
-stats = client.website_stats("your-website-id", start, end)
-bounce_rate = stats["bounces"] / stats["visits"] * 100 if stats["visits"] else 0
-print(f"{start:%Y-%m-%d}: {stats['visitors']} visitors, "
-      f"{stats['pageviews']} views, {bounce_rate:.1f}% bounce")
+stats = umami.website_stats(start_at=start, end_at=end)
+bounce_rate = stats.bounces / stats.visits * 100 if stats.visits else 0
+print(f"{start:%Y-%m-%d}: {stats.visitors} visitors, "
+      f"{stats.pageviews} views, {bounce_rate:.1f}% bounce")
 ```
 
-**Top 10 pages.**
+**Top 10 pages** — `metrics` isn't wrapped, so call it directly.
 
 ```python
-metrics = client.get(
-    "/websites/your-website-id/metrics",
-    params={"startAt": to_ms(start), "endAt": to_ms(end), "type": "path", "limit": 10},
-)
+metrics = api_get("/websites/your-website-id/metrics",
+                  startAt=to_ms(start), endAt=to_ms(end), type="path", limit=10)
 for i, row in enumerate(metrics, 1):
     print(f"{i:2}. {row['x']} — {row['y']} views")
 ```
 
-**Run a funnel report.**
+**Run a funnel report** — reports use ISO dates inside `parameters` and put filters in a `filters` object.
 
 ```python
-funnel = client.run_report(
-    "funnel",
-    "your-website-id",
-    parameters={
+funnel = api_post("/reports/funnel", {
+    "websiteId": "your-website-id",
+    "type": "funnel",
+    "filters": {"country": "US"},
+    "parameters": {
         "startDate": to_iso(start),
         "endDate": to_iso(end),
         "steps": [
@@ -1193,8 +1158,7 @@ funnel = client.run_report(
         ],
         "window": 60,
     },
-    filters={"country": "US"},
-)
+})
 for step in funnel:
     print(step["value"], step["visitors"], f"{(step['dropoff'] or 0) * 100:.1f}% drop")
 ```
@@ -1202,31 +1166,27 @@ for step in funnel:
 **Page through a large result set.**
 
 ```python
-def iter_sessions(client, website_id, start, end, page_size=100):
+def iter_sessions(website_id, start, end, page_size=100):
     page = 1
     while True:
-        resp = client.get(
-            f"/websites/{website_id}/sessions",
-            params={"startAt": to_ms(start), "endAt": to_ms(end),
-                    "page": page, "pageSize": page_size},
-        )
+        resp = api_get(f"/websites/{website_id}/sessions",
+                       startAt=to_ms(start), endAt=to_ms(end),
+                       page=page, pageSize=page_size)
         yield from resp["data"]
         if page * resp["pageSize"] >= resp["count"]:
             break
         page += 1
 ```
 
-**Batch-ingest events with rate-limit awareness (Cloud).** Split into chunks and stay under 50 calls / 15s.
+**Batch-ingest events with rate-limit awareness (Cloud).** Stay under 50 calls / 15s. (For one-off events, `umami.new_event(...)` is simpler; `/api/batch` is unauthenticated but needs a `User-Agent`.)
 
 ```python
-import time
+import time, httpx
 
-def send_batches(events, chunk=100, url="https://cloud.umami.is/api/send"):
-    batch_url = url.replace("/send", "/batch")
+def send_batches(events, chunk=100, url="https://cloud.umami.is/api/batch"):
     for i in range(0, len(events), chunk):
-        requests.post(batch_url, json=events[i:i + chunk],
-                      headers={"User-Agent": "MyApp/1.0"})
-        time.sleep(0.3)  # one batch call per item; pace below the limit
+        httpx.post(url, json=events[i:i + chunk], headers={"User-Agent": "MyApp/1.0"})
+        time.sleep(0.3)  # one batch call per chunk; pace below the limit
 ```
 
 **Compare this period vs. previous.** Either request `compare=prev` on endpoints that support it (`pageviews`, `stats` returns a `comparison` block already, `events/stats`, revenue), or make two ranged calls and diff `visitors`/`pageviews` yourself.
@@ -1235,7 +1195,7 @@ def send_batches(events, chunk=100, url="https://cloud.umami.is/api/send"):
 
 ## Official clients (JS/TS)
 
-There is no official Python SDK, but two official JavaScript/TypeScript packages exist. They're worth knowing for parity and for the function→endpoint mapping (a useful index even if you're writing a Python client).
+For Python, use [`umami-analytics`](#python-client-umami-analytics) (above). Umami's own official clients are JavaScript/TypeScript — worth knowing for parity and for the function→endpoint mapping, which is a useful index of the full endpoint set even from Python.
 
 **`@umami/api-client`** — typed client covering every data/management endpoint (Node 18.18+).
 
