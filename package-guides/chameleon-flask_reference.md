@@ -1,15 +1,28 @@
 # chameleon-flask Comprehensive Reference
 
-> **Version:** 0.6.0
+> **Version:** 0.6.1
 > **Author:** Michael Kennedy (michael@talkpython.fm)
 > **License:** MIT
 > **Repository:** https://github.com/mikeckennedy/chameleon-flask
-> **Python:** 3.10 - 3.14
+> **Documentation:** https://mkennedy.codes/docs/chameleon-flask
+> **Python:** 3.10 - 3.15
 > **Dependencies:** `flask[async]`, `Chameleon`
 
 ## Overview
 
 `chameleon-flask` is a lightweight integration library that brings the [Chameleon template language](https://chameleon.readthedocs.io/) to Flask and Quart applications. It provides a decorator-based API for rendering Chameleon templates (`.pt` and `.html` files) from view functions, with full support for both synchronous and asynchronous views.
+
+## Agent & documentation resources
+
+The project publishes machine-readable docs at [mkennedy.codes/docs/chameleon-flask](https://mkennedy.codes/docs/chameleon-flask). If you can fetch URLs, these are authoritative and stay in sync with the released package:
+
+- **Full docs site:** https://mkennedy.codes/docs/chameleon-flask
+- **llms.txt** (indexed API map): https://mkennedy.codes/docs/chameleon-flask/llms.txt
+- **llms-full.txt** (full text for LLM ingestion): https://mkennedy.codes/docs/chameleon-flask/llms-full.txt
+- **Agent skill (Markdown):** https://mkennedy.codes/docs/chameleon-flask/SKILL.md — also discoverable at `/.well-known/agent-skills/chameleon-flask/SKILL.md`
+- **Skills page (install commands):** https://mkennedy.codes/docs/chameleon-flask/skills.html
+
+Every documentation page also has a plain-Markdown twin — swap the `.html` extension for `.md` to get token-efficient source without the site chrome. For example https://mkennedy.codes/docs/chameleon-flask/reference/template.html → https://mkennedy.codes/docs/chameleon-flask/reference/template.md
 
 ## Installation
 
@@ -290,7 +303,7 @@ Trigger a 404 response with an optional custom error template. Call this from wi
 #### Signature
 
 ```python
-def not_found(four04template_file: str = 'errors/404.pt') -> None
+def not_found(four04template_file: str = 'errors/404.pt') -> NoReturn
 ```
 
 #### Parameters
@@ -337,7 +350,7 @@ Render a template to a string. This is the lowest-level rendering function, used
 #### Signature
 
 ```python
-def render(template_file: str, **template_data: dict) -> str
+def render(template_file: str, **template_data: Any) -> str
 ```
 
 #### Parameters
@@ -402,7 +415,7 @@ Raised by `not_found()` and caught by the `@template` decorator to render a 404 
 | Attribute | Type | Description |
 |---|---|---|
 | `template_file` | `str` | Path to the 404 template. |
-| `message` | `Optional[str]` | Error message (default: `'The URL resulted in a 404 response.'`). |
+| `message` | `Optional[str]` | Error message. The constructor defaults it to `None`; `not_found()` passes `'The URL resulted in a 404 response.'` when it raises. |
 
 ---
 
@@ -430,7 +443,7 @@ response_classes = {
 }
 ```
 
-Set of string representations used to detect whether a view's return value is a Flask/Quart Response (triggering pass-through, bypassing template rendering).
+Legacy fallback set of type-name strings. Response pass-through is detected **primarily** via `isinstance(value, werkzeug.sansio.response.Response)` — the shared base class of `flask.Response`, `quart.Response`, and bare werkzeug responses — so the library never imports Quart. This string set only catches Response implementations that predate that shared werkzeug base.
 
 ---
 
@@ -776,6 +789,6 @@ view()  # ValueError - template not found
 | `global_init(folder, ...)` | Initialize template engine | `None` |
 | `@template(file, ...)` | Decorator: render view result through template | `flask.Response` |
 | `response(file, ...)` | Render template to Response directly | `flask.Response` |
-| `not_found(file)` | Raise 404 inside a decorated view | `None` (raises) |
+| `not_found(file)` | Raise 404 inside a decorated view | `NoReturn` (always raises) |
 | `engine.render(file, ...)` | Render template to string | `str` |
 | `engine.clear()` | Reset engine state (for testing) | `None` |
