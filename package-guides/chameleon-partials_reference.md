@@ -2,11 +2,13 @@
 
 > Simple reuse of partial HTML page templates in the Chameleon template language for Python web frameworks.
 
-**Version:** 0.1.0
+**Version:** 0.2.0
 **Author:** Michael Kennedy <michael@talkpython.fm>
 **License:** MIT
 **PyPI:** `pip install chameleon-partials`
 **Source:** <https://github.com/mikeckennedy/chameleon_partials>
+**Documentation:** https://mkennedy.codes/docs/chameleon-partials/
+**Python:** 3.9 – 3.15 (`requires-python >= 3.9`)
 **Dependency:** [Chameleon](https://chameleon.readthedocs.io/) (the template engine used by Pyramid)
 **Companion library:** [jinja_partials](https://github.com/mikeckennedy/jinja_partials) (Jinja2/Flask equivalent)
 
@@ -15,6 +17,7 @@
 ## Table of Contents
 
 - [What It Does](#what-it-does)
+- [Agent & documentation resources](#agent--documentation-resources)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [API Reference](#api-reference)
@@ -45,6 +48,20 @@
 When building web apps with Chameleon templates, HTML fragments are often repeated across pages. `chameleon_partials` lets you extract those fragments into standalone `.pt` template files and render them anywhere with a single function call, including nesting partials inside other partials.
 
 **Core concept:** Call `render_partial('path/to/fragment.pt', key=value, ...)` from any Chameleon template to inline a rendered HTML fragment, passing data as keyword arguments.
+
+---
+
+## Agent & documentation resources
+
+The project publishes machine-readable docs at [mkennedy.codes/docs/chameleon-partials](https://mkennedy.codes/docs/chameleon-partials). If you can fetch URLs, these are authoritative and stay in sync with the released package:
+
+- **Full docs site:** https://mkennedy.codes/docs/chameleon-partials
+- **llms.txt** (indexed API map): https://mkennedy.codes/docs/chameleon-partials/llms.txt
+- **llms-full.txt** (full text for LLM ingestion): https://mkennedy.codes/docs/chameleon-partials/llms-full.txt
+- **Agent skill (Markdown):** https://mkennedy.codes/docs/chameleon-partials/SKILL.md — also at `/.well-known/agent-skills/chameleon-partials/SKILL.md`
+- **Skills page (install commands):** https://mkennedy.codes/docs/chameleon-partials/skills.html
+
+Every documentation page also has a plain-Markdown twin — swap `.html` for `.md` to get token-efficient source without site chrome. For example https://mkennedy.codes/docs/chameleon-partials/reference/render_partial.html → https://mkennedy.codes/docs/chameleon-partials/reference/render_partial.md
 
 ---
 
@@ -133,11 +150,11 @@ Initializes the chameleon_partials template system. **Must be called once at app
 
 #### Behavior
 
-1. If `cache_init=True` and already registered, returns immediately (no-op).
-2. Sets `has_registered_extensions = True`.
-3. Validates `template_folder` is not empty/falsy — raises `PartialsException` if it is.
-4. Validates `template_folder` exists and is a directory — raises `PartialsException` if not.
-5. Creates a `chameleon.PageTemplateLoader` instance pointed at the folder.
+1. If `cache_init=True` and a previous registration succeeded, returns immediately (no-op).
+2. Validates `template_folder` is not empty/falsy — raises `PartialsException` if it is.
+3. Validates `template_folder` exists and is a directory — raises `PartialsException` if not.
+4. Creates a `chameleon.PageTemplateLoader` instance pointed at the folder.
+5. Sets `has_registered_extensions = True` — only after the loader was built successfully (since 0.2.0), so a call that raised does not leave the module flagged as registered and can simply be retried.
 
 #### Raises
 
@@ -160,6 +177,7 @@ chameleon_partials.register_extensions(folder, auto_reload=True, cache_init=True
 - Use `.as_posix()` on `Path` objects to ensure forward slashes on all platforms.
 - The `PageTemplateLoader` caches compiled templates internally for performance.
 - With `auto_reload=True`, templates are checked for modifications on each render (development convenience, slight performance cost).
+- Registration is process-wide module state and is not guarded by a lock — call it from normal single-threaded startup code, not from concurrent request handlers.
 
 ---
 
@@ -168,7 +186,7 @@ chameleon_partials.register_extensions(folder, auto_reload=True, cache_init=True
 ```python
 def render_partial(
     template_file: str,
-    **template_data
+    **template_data: Any
 ) -> HTML
 ```
 
@@ -179,7 +197,7 @@ Renders a Chameleon template file and returns the result as an HTML-safe object.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `template_file` | `str` | Relative path from the registered template folder to the `.pt` file. Uses forward slashes as path separators (e.g., `'shared/partials/video_image.pt'`). |
-| `**template_data` | keyword args | Arbitrary keyword arguments passed as template variables. Each key becomes a variable name accessible in the template via `${ key }` or TAL expressions. |
+| `**template_data` | `Any` (keyword args) | Arbitrary keyword arguments passed as template variables. Each key becomes a variable name accessible in the template via `${ key }` or TAL expressions. The name `encoding` is reserved and cannot be used; `translate`, `target_language`, and `repeat` have special meaning to Chameleon. |
 
 #### Returns
 
@@ -235,7 +253,7 @@ This means any partial template can call `render_partial()` to nest further part
 
 ```python
 def extend_model(
-    model: Dict[str, Any]
+    model: Optional[Dict[str, Any]]
 ) -> Dict[str, Any]
 ```
 
@@ -249,7 +267,7 @@ Helper function that injects `render_partial` into a view model dictionary. Use 
 
 #### Returns
 
-The same `model` dict, now containing `model['render_partial'] = render_partial`.
+The same `model` dict, now containing `model['render_partial'] = render_partial`. Unlike `render_partial()`'s inject-if-missing behavior, any existing `render_partial` key in the model is unconditionally replaced.
 
 #### Raises
 
@@ -338,7 +356,7 @@ template_path: Optional[str] = None        # Registered folder path
 - `has_registered_extensions` is checked on every `render_partial()` call.
 - `__templates` holds the Chameleon `PageTemplateLoader`, which handles template caching and optional auto-reload.
 - `template_path` stores the registered directory path.
-- When `cache_init=True` (default), calling `register_extensions()` a second time is a no-op.
+- When `cache_init=True` (default), calling `register_extensions()` again after a previous *successful* registration is a no-op. Since 0.2.0 the flag is set only after the loader builds successfully, so a failed registration can be retried without passing `cache_init=False`.
 - In tests, reset state between tests by setting `chameleon_partials.has_registered_extensions = False`.
 
 ---
