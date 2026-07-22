@@ -19,7 +19,7 @@ The project publishes machine-readable docs at [mkennedy.codes/docs/chameleon-fl
 - **Full docs site:** https://mkennedy.codes/docs/chameleon-flask
 - **llms.txt** (indexed API map): https://mkennedy.codes/docs/chameleon-flask/llms.txt
 - **llms-full.txt** (full text for LLM ingestion): https://mkennedy.codes/docs/chameleon-flask/llms-full.txt
-- **Agent skill (Markdown):** https://mkennedy.codes/docs/chameleon-flask/SKILL.md — also discoverable at `/.well-known/agent-skills/chameleon-flask/SKILL.md`
+- **Agent skill (Markdown):** https://mkennedy.codes/docs/chameleon-flask/skill.md — also discoverable at `/.well-known/agent-skills/chameleon-flask/SKILL.md`
 - **Skills page (install commands):** https://mkennedy.codes/docs/chameleon-flask/skills.html
 
 Every documentation page also has a plain-Markdown twin — swap the `.html` extension for `.md` to get token-efficient source without the site chrome. For example https://mkennedy.codes/docs/chameleon-flask/reference/template.html → https://mkennedy.codes/docs/chameleon-flask/reference/template.md
