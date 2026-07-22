@@ -2,12 +2,15 @@
 
 > Umami is a privacy-focused, open-source web analytics platform (a Google Analytics alternative). Everything you can do in the Umami dashboard is available over a JSON HTTP API: managing websites, users, and teams; pulling stats, metrics, sessions, and event data; running attribution/funnel/journey/retention/revenue reports; and ingesting page views and custom events from any backend. This guide documents the full HTTP surface so you can build a client against it in any language. The official clients are JavaScript/TypeScript (`@umami/api-client`, `@umami/node`); for Python, the community `umami-analytics` package wraps the most common calls, and this guide documents the full REST surface so you can reach everything beyond that.
 
+> **Python client:** `umami-analytics` (install `uv pip install umami-analytics`, import `umami`) — **Version** 1.0.x · **Python** 3.10+ · **License** MIT · **Repository** https://github.com/mikeckennedy/umami-python · **Documentation** https://mkennedy.codes/docs/umami-python/
+
 > Verified against the official Umami API documentation (`api.umami.is`), API changelog through **2026-05-28**. Applies to self-hosted Umami **v2.x / v3.x** and **Umami Cloud**. All data is returned as JSON.
 
 ---
 
 ## Table of contents
 
+- [Agent & documentation resources](#agent--documentation-resources)
 - [Installation & scope](#installation--scope)
 - [Base URLs](#base-urls)
 - [Authentication](#authentication)
@@ -44,6 +47,22 @@
 - [Common patterns](#common-patterns)
 - [Official clients (JS/TS)](#official-clients-jsts)
 - [Appendix: API changelog highlights](#appendix-api-changelog-highlights)
+
+---
+
+## Agent & documentation resources
+
+The Python `umami-analytics` client publishes machine-readable docs at [Umami Analytics](https://mkennedy.codes/docs/umami-python/). If you can fetch URLs, these are authoritative and stay in sync with the released package:
+
+- **Full docs site:** https://mkennedy.codes/docs/umami-python/
+- **llms.txt** (indexed API map): https://mkennedy.codes/docs/umami-python/llms.txt
+- **llms-full.txt** (full text for LLM ingestion): https://mkennedy.codes/docs/umami-python/llms-full.txt
+- **Agent skill (Markdown):** https://mkennedy.codes/docs/umami-python/skill.md — also at `/.well-known/agent-skills/umami/SKILL.md`
+- **Skills page (install commands):** https://mkennedy.codes/docs/umami-python/skills.html
+
+Every documentation page also has a plain-Markdown twin — swap `.html` for `.md` to get token-efficient source without site chrome. For example https://mkennedy.codes/docs/umami-python/reference/new_event.html → https://mkennedy.codes/docs/umami-python/reference/new_event.md
+
+Scope note: that hosted site documents the Python client's public surface specifically (config, auth, sending events, querying stats). This reference guide covers the **full Umami HTTP API** — the client wraps only the common subset, so use this guide for everything the client does not expose (reports, sessions, metrics, teams, users, links, pixels, shares).
 
 ---
 
@@ -332,10 +351,12 @@ print(websites["data"])
 
 ## Python client: `umami-analytics`
 
-For Python, the community **[`umami-analytics`](https://github.com/mikeckennedy/umami-python)** package (by Michael Kennedy) is the most direct way in. It's built on `httpx` and `pydantic`, ships **sync and async** variants of every networked call (`func()` and `func_async()`), and deliberately wraps the **subset most apps need** — sending events/page views/revenue, listing websites, summarized stats, active users, and auth. Configuration and the auth token are held at module level, so most calls take no boilerplate.
+For Python, the community **[`umami-analytics`](https://github.com/mikeckennedy/umami-python)** package (by Michael Kennedy) is the most direct way in. It's built on `httpx` and `pydantic`, ships **sync and async** variants of every networked call (`func()` and `func_async()`), and deliberately wraps the **subset most apps need** — sending events/page views/revenue, listing websites, summarized stats, active users, and auth. It supports both **self-hosted** (username/password → bearer token) and **Umami Cloud** (`set_cloud_api_key()`) modes. Configuration and the auth token are held at module level, so most calls take no boilerplate. Stable 1.0 release; requires Python 3.10+.
+
+The distribution name (`umami-analytics`) differs from the import name (`umami`):
 
 ```bash
-pip install umami-analytics
+uv pip install umami-analytics    # then: import umami
 ```
 
 ```python
@@ -375,7 +396,8 @@ Coverage map (every networked call also has an `_async` twin, e.g. `new_event_as
 | Function | Endpoint | Notes |
 | --- | --- | --- |
 | `set_url_base` / `set_website_id` / `set_hostname` | — | Module-level config and defaults. |
-| `enable()` / `disable()` | — | Toggle tracking; when disabled, `new_*` calls no-op (still validate). |
+| `set_cloud_api_key(key, region=None)` / `clear_cloud_api_key()` | — | Switch to **Umami Cloud** mode: routes data calls to `https://api.umami.is/v1` with `x-umami-api-key` and sends events to `https://cloud.umami.is/api/send`. Mutually exclusive with `set_url_base()` + `login()`; calling `login()` in Cloud mode raises. |
+| `enable()` / `disable()` | — | Toggle tracking; when disabled, `new_*` calls no-op (still validate, return `{}`). |
 | `login(username, password)` | `POST /api/auth/login` | Caches the bearer token; returns a `LoginResponse` with `.token`. |
 | `verify_token(check_server=True)` | `POST /api/auth/verify` | Returns `bool`. |
 | `is_logged_in()` | — | Whether a token is cached. |
@@ -385,7 +407,7 @@ Coverage map (every networked call also has an `_async` twin, e.g. `new_event_as
 | `new_event(event_name, url, ...)` | `POST /api/send` (`type=event`) | Custom event; no auth needed. `distinct_id` → payload `id`. |
 | `new_page_view(page_title, url, ...)` | `POST /api/send` | Page view (no event name). |
 | `new_revenue_event(revenue, currency, ...)` | `POST /api/send` | Adds `revenue`/`currency` to the event data. |
-| `heartbeat()` | `POST /api/heartbeat` | Server-reachability check. |
+| `heartbeat()` | `GET /api/heartbeat` | Server-reachability check (uses an authenticated `GET /me` on Cloud). Returns `bool`; never raises. |
 
 **Beyond the wrapped subset** — reports, sessions, event data, metrics/pageview series, realtime, teams, users, links, pixels, and share pages — call the HTTP API directly. After `umami.login(...)` you already have a token; a thin helper plus the two date converters (for the [ms-vs-ISO split](#two-date-conventions-read-this)) is all you need:
 
