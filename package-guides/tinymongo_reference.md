@@ -2,7 +2,9 @@
 
 > TinyMongo gives you a PyMongo-shaped document API backed by embedded storage instead of a MongoDB server. The default backend is [TinyDB](https://tinydb.readthedocs.io/) JSON files, with optional memory, SQLite, DuckDB, Parquet, PostgreSQL, and MariaDB/MySQL backends. It implements a practical *subset* of PyMongo — enough for small apps, prototypes, CLI tools, and test suites that would otherwise need a running `mongod`.
 
-> Version: 1.2.0 | License: MIT | Python: 3.9+ | Built from the source code of the TinyMongo 1.2.0 repository (`schapman1974/tinymongo`), with every signature, default, and behavior below cross-checked against the implementation and verified against a live install.
+> Version: 1.3.0 | License: MIT | Python: 3.9+ | Built from the source code of the TinyMongo repository (`schapman1974/tinymongo`) at commit `0a4c549`, with every signature, default, and behavior below cross-checked against the implementation and verified against a live install.
+
+> **Master, not PyPI.** Everything below describes `master`. PyPI's published wheel predates the async client, the aggregation subset, and most of the BSON work — following the install instructions and then importing `AsyncMongoClient` will fail. Pin a commit: `pip install "tinymongo[all,bson,pymongo] @ git+https://github.com/schapman1974/tinymongo.git@0a4c549"`.
 
 ---
 
@@ -26,6 +28,7 @@
   - [Find and Modify](#find-and-modify)
   - [Deletes](#deletes)
   - [Counting and Distinct](#counting-and-distinct)
+  - [Aggregation](#aggregation)
   - [Collection Management](#collection-management)
   - [Unsupported Collection Methods](#unsupported-collection-methods)
 - [Query Operators](#query-operators)
@@ -125,44 +128,58 @@ This is the single most important table in this document. TinyMongo is a subset 
 
 | Area | Details |
 |------|---------|
-| CRUD | `insert_one`, `insert_many`, `find`, `find_one`, `update_one`, `update_many`, `replace_one`, `delete_one`, `delete_many` |
+| CRUD | `insert_one`, `insert_many` (including `ordered=`), `find`, `find_one`, `update_one`, `update_many`, `replace_one`, `delete_one`, `delete_many` |
 | Find & modify | `find_one_and_update`, `find_one_and_replace`, `find_one_and_delete` |
-| Query operators | `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$nin`, `$all`, `$and`, `$or`, `$nor`, `$not`, `$regex`, `$options`, `$exists` |
-| Update operators | `$set`, `$unset`, `$inc`, `$push`, `$pull`, `$addToSet` (plus `upsert=True`) |
+| Query operators | `$eq`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$nin`, `$all`, `$and`, `$or`, `$nor`, `$not`, `$regex`, `$options`, `$exists`, `$size`, `$type`, `$mod`, `$elemMatch`, `$comment` |
+| Update operators | `$set`, `$unset`, `$inc`, `$min`, `$max`, `$pop`, `$push`, `$pull`, `$pullAll`, `$addToSet`, `$rename` (plus `upsert=True`), with `$each`/`$position`/`$slice`/`$sort` modifiers |
+| Aggregation | A real subset: `$match`, `$sort`, `$skip`, `$limit`, `$count`, `$project`, `$set`, `$addFields`, `$unset`, `$group` |
 | Projections | Inclusion / exclusion, dotted paths, MongoDB `_id` rules |
 | Cursors | `sort` (single and multi-key), `skip`, `limit`, `clone`, `rewind`, `close`, `to_list`, `count` |
 | Indexes | Durable single-field ascending indexes, `unique=True`, `create_indexes`, `drop_index`, `list_indexes`, `index_information` |
 | Counting | `count_documents`, `estimated_document_count`, `distinct` |
 | Admin | `list_database_names`, `list_databases`, `drop_database`, `list_collection_names`, `drop_collection` |
 | Async | Full non-blocking client/database/collection/cursor API |
-| Types | `datetime` everywhere; `ObjectId` with `tinymongo[bson]` |
+| BSON types | `datetime`, `uuid.UUID`, `bytes` natively; `ObjectId`, `Decimal128`, `Binary`, `Regex`, `MinKey`, `MaxKey`, `Timestamp`, `Code` with `tinymongo[bson]` |
 
 ### Not supported — raises `TinyMongoNotSupportedError`
 
 | Call | Notes |
 |------|-------|
-| `collection.aggregate(...)` | No aggregation pipelines at all |
-| `collection.bulk_write(...)` | No bulk write API |
+| `collection.bulk_write(...)` | No bulk write API. (`insert_many` is native and does honor `ordered=`.) |
 | `collection.watch(...)`, `db.watch(...)`, `client.watch(...)` | No change streams |
 | `client.start_session(...)` | No sessions or transactions |
-| `db.command(...)` | No database commands |
+| `db.command(...)` | Only `ping` and `buildInfo` are implemented; every other command raises |
 | Any method passed `session=<not None>` | Rejected by an internal guard |
 | `collection.with_options(...)` with non-default read/write concerns | Default concerns are accepted and ignored |
+| Aggregation stages outside the subset | `$lookup`, `$unwind`, `$facet`, `$bucket`, … raise by name |
 | `create_index` with descending / compound / `sparse` / TTL options | See [Indexes](#indexes) for what degrades vs. what fails |
 
-### Not supported — **fails silently**
+### Refused loudly, not silently
 
-These are the dangerous ones. Unknown query operators do not raise; they simply match nothing:
+**This is the single biggest behavioral change from older releases, and it is an improvement.** TinyMongo used to answer an unimplemented query operator with an empty result set — a wrong answer with nothing to catch. It now validates filters against a known-operator list and raises:
 
 ```python
-col.find({"tags": {"$size": 2}})        # -> [] (not an error)
-col.find({"score": {"$type": "int"}})   # -> []
-col.find({"tags": {"$elemMatch": {...}}})  # -> []
-col.find({"score": {"$mod": [2, 1]}})   # -> []
-col.find({"$where": "..."})             # -> []
+col.find({"$where": "..."})              # TinyMongoNotSupportedError: Query operator $where is not supported
+col.find({"$expr": {...}})               # TinyMongoNotSupportedError
+col.find({"score": {"$bogusOp": 1}})     # TinyMongoNotSupportedError
 ```
 
-Also absent: GridFS (`TinyGridFS` is a stub with no implementation), text search, geospatial queries, `$expr`, `$jsonSchema`, collations, read preferences, and authentication.
+`$size`, `$type`, `$mod` and `$elemMatch` are no longer in that list because they are now **implemented**. Explicitly refused by name: `$where`, `$expr`, `$jsonSchema`, `$text`, `$near`, `$nearSphere`, `$geoWithin`, `$geoIntersects`, and the four `$bits*` operators.
+
+Also absent: GridFS (`TinyGridFS` is a stub with no implementation), collations, read preferences, and authentication.
+
+### Known divergences still open
+
+Behaviors verified as differing from MongoDB 8.2 at this commit. Design around these:
+
+| Behavior | MongoDB | TinyMongo |
+|---|---|---|
+| `replace_one({"_id": X}, doc, upsert=True)` on a missing document | seeds the new document's `_id` from the filter, so `X` finds it | generates a **fresh `ObjectId`**; the document is silently unreachable by `X`. `update_one(upsert=True)` is correct on the same filter — prefer it. |
+| `$pull` with `$exists`, `$type`, `$ne`, `$mod`, `$all`, `$size`, field-level `$not`, `$expr` | applies the predicate | `WriteError` code `2`. `$eq`, `$in`, `$nin`, `$regex`, `$elemMatch`, `$gt`, `$gte`, `$lt`, `$lte` all work. |
+| An all-zero top-level `Timestamp(0, 0)` on insert | replaced with current server time | stored literally |
+| `re.compile(...)` read back | `bson.Regex` | `re.Pattern`. Store `bson.Regex` explicitly to be exact on both. |
+| `bson.Binary` read back | `Binary` (subtype preserved) | `bytes`. Subtype is not round-tripped. |
+| `bson.Int64` read back | `Int64` | `int` |
 
 ---
 
@@ -178,7 +195,7 @@ from tinymongo import (
     TinyGridFS,             # stub, not implemented
     ASCENDING,              # 1
     DESCENDING,             # -1
-    generate_id,            # uuid4 hex string generator
+    generate_id,            # uuid4 hex string generator (NOT what inserts use — see Inserts)
     patch,                  # PyMongo patching context manager / decorator
     TinyMongoUnsupportedWarning,
     AsyncMongoClient,
@@ -215,12 +232,15 @@ TinyMongoClient(
     foldername: str = "tinydb",
     backend: str = "tinydb",
     *,
+    tinymongo_folder: str | None = None,
     threads: int | None = None,
     storage_uri: str | None = None,
     duckdb_config: dict | None = None,
     dsn: str | None = None,
 )
 ```
+
+There is deliberately **no `**kwargs`**. A misspelled keyword raises `TypeError` rather than being silently discarded — which used to send data to `./tinydb` instead of the folder you asked for.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -278,7 +298,7 @@ print(client.server_info())
 
 ### Capabilities
 
-`capabilities()` reports what the *configured backend* can actually honor — useful for writing code that adapts to TinyMongo vs. real MongoDB.
+`capabilities()` reports what the *configured backend* can actually honor — useful for writing code that adapts to TinyMongo vs. real MongoDB. **Four of the keys report structured detail rather than a boolean**, so you can check for an individual operator or stage instead of guessing:
 
 ```python
 {
@@ -291,15 +311,48 @@ print(client.server_info())
     "native_indexes": True,       # sqlite, postgres, mysql/mariadb
     "projections": True,
     "bulk_writes": False,
-    "aggregation": False,
     "sessions": False,
     "transactions": False,
     "change_streams": False,
-    "bson_types": False,          # True when bson/pymongo is importable
+
+    "aggregation": {
+        "stages": ["$match", "$sort", "$skip", "$limit", "$count",
+                   "$project", "$set", "$addFields", "$unset", "$group"],
+        "accumulators": ["$addToSet", "$avg", "$first", "$last",
+                         "$max", "$min", "$push", "$sum"],
+        "expressions": ["$ifNull", "$literal", "$size"],
+    },
+    "query_operators": {
+        "logical": ["$and", "$or", "$nor"],
+        "ignored": ["$comment"],
+        "field": ["$all", "$elemMatch", "$eq", "$exists", "$gt", "$gte",
+                  "$in", "$lt", "$lte", "$ne", "$nin", "$not", "$mod",
+                  "$options", "$regex", "$size", "$type"],
+    },
+    "update_operators": {
+        "operators": ["$addToSet", "$inc", "$max", "$min", "$pop", "$pull",
+                      "$pullAll", "$push", "$rename", "$set", "$unset"],
+        "modifiers": {"$addToSet": ["$each"],
+                      "$push": ["$each", "$position", "$slice", "$sort"]},
+    },
+    "bson_types": {
+        "native": ["array", "boolean", "binary", "datetime", "double", "int",
+                   "long", "null", "object", "regex", "string", "uuid"],
+        "pymongo": ["binary", "code", "decimal128", "maxkey", "minkey",
+                    "objectid", "regex", "timestamp"],
+    },
 }
 ```
 
-`supports(feature)` returns the boolean for one key and raises `ValueError` for an unknown key or for `"backend"`.
+The inner sequences are **tuples**, not lists. `bson_types["pymongo"]` is empty when `bson` is not importable; `native` always works.
+
+`supports(feature)` returns `bool(capabilities[feature])` for one key and raises `ValueError` for an unknown key or for `"backend"`. Watch the trap on the four structured keys: a non-empty dict is truthy, so `client.supports("aggregation")` is **`True` on every backend** and tells you nothing about whether a particular stage exists. Check membership instead:
+
+```python
+caps = client.capabilities()
+if "$group" in caps["aggregation"]["stages"]:
+    ...
+```
 
 ---
 
@@ -318,6 +371,14 @@ MongoClient(
 ```
 
 `MongoClient` subclasses `TinyMongoClient` and exists so PyMongo-shaped code runs unchanged. **Network arguments are accepted and ignored** — hosts, ports, MongoDB URIs, `serverSelectionTimeoutMS`, and friends never open a socket.
+
+`**kwargs` is *validated* rather than swallowed: the names are checked against PyMongo's real option list, and anything else raises `ConfigurationError` exactly as PyMongo does. A one-character typo is caught instead of silently redirecting your data.
+
+```python
+MongoClient(tinymongo_fodler="./data")   # ConfigurationError: Unknown option: tinymongo_fodler
+```
+
+Two options are accepted **and honored**, not just tolerated: `document_class` (every returned document, including nested subdocuments and documents inside arrays, is built with that class) and `tz_aware`.
 
 Storage folder resolution (`_folder_from_mongo_client_args`), in precedence order:
 
@@ -361,18 +422,31 @@ db["collection_name"]        # item access -> TinyMongoCollection
 db.get_collection(name, *args, **kwargs) -> TinyMongoCollection
 
 db.collection_names() -> list[str]
-db.list_collection_names() -> list[str]
+db.list_collection_names(session=None, filter=None, comment=None, **kwargs) -> list[str]
 db.drop_collection(name_or_collection, *args, **kwargs) -> bool
 db.close() -> None
-db.command(*args, **kwargs)  # raises TinyMongoNotSupportedError
+db.command(command, value=1, *args, **kwargs)   # 'ping' and 'buildInfo' only
 db.watch(*args, **kwargs)    # raises TinyMongoNotSupportedError
 ```
 
 | Method | Notes |
 |--------|-------|
-| `collection_names()` | All table names except internal ones prefixed `__tinymongo_`. **Includes TinyDB's `_default` table.** |
-| `list_collection_names()` | Same list with `_default` filtered out. Prefer this one. |
+| `collection_names()` | All table names, excluding internal ones prefixed `__tinymongo_` **and TinyDB's `_default`**. |
+| `list_collection_names()` | Same list. Additionally accepts PyMongo's server-side listing hints `authorizedCollections=` and `nameOnly=`; any other keyword raises `TypeError`. Prefer this one. |
 | `drop_collection(name)` | Accepts a name or a `TinyMongoCollection`; delegates to `collection.drop()` and returns its `bool`. |
+| `command(name)` | Only the two discovery commands PyMongo-compatible tooling needs. Everything else raises. |
+
+`db.command` implements exactly two commands, taking either a string or a mapping (`db.command("ping")` or `db.command({"buildInfo": 1})`), matched case-insensitively:
+
+```python
+db.command("ping")        # {'ok': 1.0}
+db.command("buildInfo")   # {'version': '8.0.0', 'versionArray': [8, 0, 0, 0],
+                          #  'ok': 1.0, 'tinymongo': True}
+db.command("serverStatus")
+# TinyMongoNotSupportedError: Database command 'serverStatus' is not supported by TinyMongo
+```
+
+The reported version is a **compatibility claim, not a real server** — `buildInfo` answers `8.0.0` so ODMs that gate features on a server version proceed, and flags itself with `"tinymongo": True` so you can tell.
 
 > **Gotcha:** `db.<anything>` always returns a collection handle. There is no such thing as an unknown attribute on a database — `db.typo` silently gives you a collection named `typo`.
 
@@ -406,18 +480,37 @@ insert(docs, *args, **kwargs)                  # legacy: dispatches on list vs d
 | `bypass_document_validation` | `bool` | `False` | Skips user-defined checks on table backends. **Never** bypasses the built-in unique `_id` constraint. |
 | `session` | — | `None` | Any non-`None` value raises `TinyMongoNotSupportedError`. |
 
-`_id` handling: if the document has no `_id`, or `_id is None`, one is generated with `generate_id()` — a 32-character `uuid4().hex`-style string, **not** an `ObjectId`. Explicit falsy ids (`0`, `False`, `""`) are respected. Reusing an existing `_id` raises `DuplicateKeyError`.
+`_id` handling: if the document has no `_id`, or `_id is None`, one is generated by `_generate_document_id()`, which returns **a real `bson.ObjectId` when `tinymongo[bson]` is installed** and falls back to `generate_id()` (a 32-character `uuid4().hex` string) only when it is not. Explicit falsy ids (`0`, `False`, `""`) are respected. Reusing an existing `_id` raises `DuplicateKeyError`.
+
+This is what makes the ubiquitous PyMongo round trip work unchanged:
 
 ```python
 result = users.insert_one({"name": "Ada"})
-result.inserted_id      # 'e391a1949006412cad37fd33a163208d'
-result.eid              # underlying TinyDB element id
-result.acknowledged     # True
+result.inserted_id                       # ObjectId('6a716c35742552c334e444b8')
+ObjectId(str(result.inserted_id))        # round-trips, as against a real server
+result.eid                               # underlying TinyDB element id
+result.acknowledged                      # True
+```
 
+> The module-level `generate_id()` helper still returns a uuid4 hex string. It is exported for callers who explicitly want one; it is **not** what inserts use when bson is available.
+
+`insert_many` honors `ordered=`, matching PyMongo:
+
+```python
 result = users.insert_many([{"_id": 1}, {"_id": 2}])
 result.inserted_ids     # [1, 2]
 result.eids             # [1, 2]
+
+# ordered=False continues past a per-document failure and reports every offender at once
+try:
+    users.insert_many([{"_id": 3}, {"_id": 1}, {"_id": 4}], ordered=False)
+except BulkWriteError as exc:
+    exc.details["nInserted"]                  # 2 — 3 and 4 landed
+    exc.details["writeErrors"][0]["index"]    # 1
+    exc.details["writeErrors"][0]["code"]     # 11000
 ```
+
+An *encoding* failure is different from a write error: a value the codec cannot represent raises `InvalidDocument` with **nothing inserted**, regardless of `ordered=`, because the whole batch is validated up front. PyMongo behaves the same way. The message names the offender: `document index 1, document _id=2 at "$['bad']": cannot encode`.
 
 > **The caller's dict is mutated.** `insert_one({"name": "Ada"})` adds `_id` to the dict you passed in. Deep-copy first if that matters.
 
@@ -504,6 +597,20 @@ r.upserted_id        # generated _id
 
 Upsert document construction (`_document_for_upsert`): non-`$` keys from the filter are copied in (dotted keys expand into nested documents, and `{"field": {"$eq": v}}` contributes `v`); other operator-valued keys are skipped. Then the update operators are applied.
 
+> ### `replace_one(upsert=True)` discards an `_id` pinned by its own filter
+>
+> A verified divergence, and the dangerous kind: it is silent. MongoDB seeds an upserted document from the equality fields of the filter, so `replace_one({"_id": 77}, doc, upsert=True)` creates a document whose `_id` **is** `77`. TinyMongo generates a fresh `ObjectId` instead and reports that as `upserted_id`. Nothing raises, nothing warns, and the document is then unreachable by the key the caller chose.
+>
+> ```python
+> col.replace_one({"_id": 77}, {"v": 7}, upsert=True)
+> col.find_one({"_id": 77})        # None — the document exists under a different _id
+>
+> col.update_one({"_id": 77}, {"$set": {"v": 7}}, upsert=True)
+> col.find_one({"_id": 77})        # {'_id': 77, 'v': 7}  <-- correct
+> ```
+>
+> `update_one(upsert=True)` handles the identical filter correctly, and **both** operators are correct when the filter pins a non-`_id` field. Until this is fixed, use `update_one` with `$set` for save-or-create under a known key.
+
 ### Find and Modify
 
 ```python
@@ -555,7 +662,12 @@ estimated_document_count(*args, **kwargs) -> int     # == count_documents({})
 distinct(key, filter=None, *args, **kwargs) -> list
 ```
 
-`distinct` walks matching documents, resolves the dotted `key`, flattens list values, and de-duplicates using **type-sensitive** comparison (`type(a) is type(b) and a == b`), so `1` and `True` are kept as separate values. Results are returned in first-seen order, not sorted.
+`distinct` walks matching documents, resolves the dotted `key`, flattens list values, and de-duplicates using **BSON identity**, matching MongoDB: `1`, `1.0` and `Decimal128("1")` collapse to a single value, while `True` stays distinct from `1` because boolean is a separate BSON type. Results are returned in first-seen order, not sorted.
+
+```python
+col.insert_many([{"v": 1}, {"v": 1.0}, {"v": Decimal128("1")}, {"v": True}])
+col.distinct("v")        # [1, True]   <- not [1, 1.0, Decimal128('1'), True]
+```
 
 ```python
 users.count_documents({"score": {"$gte": 8}})
@@ -571,10 +683,52 @@ drop(**kwargs) -> bool
 
 Drops the table and removes its index catalog entries. Returns `True` on success, `False` if the collection does not exist. `writeConcern` and similar kwargs are accepted and ignored; `session` is rejected.
 
+### Aggregation
+
+```python
+aggregate(pipeline: list[dict], *args, **kwargs) -> TinyMongoCursor
+```
+
+A real subset, not a stub. Stages outside it raise `TinyMongoNotSupportedError` **by name**, so an unsupported pipeline fails loudly rather than returning a plausible wrong answer.
+
+| Category | Supported |
+|----------|-----------|
+| Stages | `$match`, `$sort`, `$skip`, `$limit`, `$count`, `$project`, `$set`, `$addFields`, `$unset`, `$group` |
+| `$group` accumulators | `$sum`, `$avg`, `$min`, `$max`, `$first`, `$last`, `$push`, `$addToSet` |
+| Expressions | `$ifNull`, `$literal`, `$size` |
+
+```python
+list(orders.aggregate([
+    {"$match": {"status": "shipped"}},
+    {"$group": {"_id": "$customer", "total": {"$sum": "$amount"}, "n": {"$sum": 1}}},
+    {"$sort": {"total": -1}},
+    {"$limit": 10},
+]))
+
+orders.aggregate([{"$lookup": {...}}])
+# TinyMongoNotSupportedError: Aggregation stage $lookup is not supported by TinyMongo
+```
+
+`$match` uses the same filter engine as `find()`, and `$sort` the same BSON ordering as `cursor.sort()`, so a pipeline and an equivalent query agree with each other by construction. `$sum` over `Decimal128` totals correctly rather than silently returning `0`.
+
+Check for a stage before relying on it:
+
+```python
+stages = client.capabilities()["aggregation"]["stages"]
+if "$group" not in stages:
+    ...                       # fall back to computing in Python
+```
+
+The async API returns a cursor from a coroutine, so it takes two awaits:
+
+```python
+cursor = await collection.aggregate(pipeline)
+rows = await cursor.to_list(length=None)
+```
+
 ### Unsupported Collection Methods
 
 ```python
-col.aggregate(...)     # TinyMongoNotSupportedError: Aggregation pipelines are not supported
 col.bulk_write(...)    # TinyMongoNotSupportedError: Bulk writes are not supported
 col.watch(...)         # TinyMongoNotSupportedError: Change streams are not supported
 col.with_options(...)  # returns self; raises only for non-default read/write concerns
@@ -605,11 +759,19 @@ users.no_such_method({"a": 1})     # TypeError: 'TinyMongoCollection' object is 
 | `$exists` | yes | Truthy/falsy operand. |
 | `$regex` | yes | Python `re.search` semantics, applied to string values (including array members). |
 | `$options` | yes | `i`, `m`, `s`, `x` flags. Only valid alongside `$regex`; alone it matches nothing. |
-| `$not` | yes | Negates a nested operator document, or a scalar as `$eq`. |
+| `$not` | yes | Negates a nested operator document. A **non-document operand raises** rather than being coerced to `$eq` — matching MongoDB, which refuses it. |
 | `$and`, `$or`, `$nor` | yes | Top-level list operators. |
+| `$size` | yes | Array length equality. |
+| `$type` | yes | BSON type alias or number. |
+| `$mod` | yes | `[divisor, remainder]`. |
+| `$elemMatch` | yes | Matches a single array member against a whole predicate document. |
+| `$comment` | accepted, ignored | Honored at the top level, at field level, inside logical operators, and inside `$elemMatch`. |
 | dotted paths | yes | `{"profile.city": "NYC"}` |
 | embedded document equality | yes | `{"meta": {"k": 1}}` compares the whole subdocument. |
-| `$size`, `$type`, `$elemMatch`, `$mod`, `$where`, `$expr`, `$text`, `$near`, `$jsonSchema` | **no** | **Match nothing and raise nothing.** |
+| `$where`, `$expr`, `$jsonSchema`, `$text`, `$near`, `$nearSphere`, `$geoWithin`, `$geoIntersects`, `$bitsAllSet`, `$bitsAnySet`, `$bitsAllClear`, `$bitsAnyClear` | **no** | **Raise `TinyMongoNotSupportedError`.** They no longer return an empty result set. |
+| any unrecognized `$operator` | **no** | Also raises, by name. |
+
+`MinKey` and `MaxKey` work as range operands and cross every BSON type bracket, so `{"$gte": MinKey(), "$lte": MaxKey()}` is a genuine full-range scan through `find()`, aggregation `$match`, and `$pull` alike.
 
 ```python
 col.find({"score": {"$gt": 6}})
@@ -634,12 +796,27 @@ col.find({"profile.city": "NYC"})
 | `$set` | Sets a value at a dotted path, creating intermediate dicts as needed. |
 | `$unset` | Removes a key at a dotted path. **See the warning below.** |
 | `$inc` | Adds to the current value; treats a missing field as `0`. |
-| `$push` | Appends to a list; treats a missing field as `[]`. `ValueError` if the target exists and is not a list. |
-| `$pull` | Removes every element equal to the value. `ValueError` for non-list targets. |
-| `$addToSet` | Appends only if not already present. `ValueError` for non-list targets. |
-| anything else | `ValueError: Unsupported update operator: $rename` |
+| `$min` / `$max` | Writes only if the new value is lower / higher than the current one. |
+| `$rename` | Moves a field to a new name. |
+| `$push` | Appends to a list; treats a missing field as `[]`. Supports the `$each`, `$position`, `$slice` and `$sort` modifiers. |
+| `$pop` | Removes the first (`-1`) or last (`1`) element. |
+| `$pull` | Removes every element matching a value **or a predicate** — `$eq`, `$in`, `$nin`, `$regex`, `$elemMatch`, `$gt`, `$gte`, `$lt`, `$lte`. |
+| `$pullAll` | Removes every element equal to any value in the given list. |
+| `$addToSet` | Appends only if not already present. Supports the `$each` modifier. |
+| anything else | `TinyMongoNotSupportedError: Unsupported update operator: $bogus` |
+
+Non-list targets for `$push` / `$pull` / `$addToSet` raise a PyMongo-shaped `WriteError`, not a bare `ValueError`. `$pull` against a document that simply **lacks** the field leaves it untouched and reports zero modified, as MongoDB does — it does not create it as `[]`.
 
 Every operator value must be a dict, or `ValueError("<op> update requires a dict")` is raised. `_id` is always preserved from the original document.
+
+```python
+col.update_one({"_id": 1}, {"$push": {"a": {"$each": [7, 4], "$sort": 1, "$slice": 3}}})
+col.update_one({"_id": 1}, {"$pull": {"a": {"$gte": 7}}})
+col.update_one({"_id": 1}, {"$pullAll": {"a": [1, 2]}})
+col.update_one({"_id": 1}, {"$rename": {"name": "title"}})
+```
+
+> **`$pull` still refuses part of its surface.** `$exists`, `$type`, `$ne`, `$mod`, `$all`, `$size`, a field-level `$not`, and `$expr` raise `WriteError` code `2` even though MongoDB accepts them. This is a loud failure, not a silent one.
 
 > ### `$unset` does not remove fields on the JSON and memory backends
 >
@@ -705,6 +882,8 @@ users.find({}, ["name", "email"])                 # list form = inclusion
 
 Cursors are **eager**: the query has already run and results are held in memory. Sorting, skipping, and limiting operate on that in-memory list.
 
+Skip and limit are not purely post-hoc, though. On SQLite the bounds are pushed into the query as a real `LIMIT ? OFFSET ?` (`find_bounded` / `_sqlite_bounds`), so `find({}, {"_id": 1}, 0, 10)` reads ten rows rather than the whole collection. An unbounded `find({})` with no projection still materializes everything, so treat that as the shape to avoid on large collections. Calling `.sort()` re-sorts the full source data and then reapplies the window, which necessarily reads more than the window.
+
 ```python
 cursor.sort(key_or_list, direction=None) -> TinyMongoCursor
 cursor.skip(n: int) -> TinyMongoCursor
@@ -746,16 +925,28 @@ page = users.find({}).sort("_id", 1).to_list(20)
 
 `_order` assigns a type rank so heterogeneous values remain sortable:
 
-| Rank | Types |
-|------|-------|
-| 0 | `None`, missing fields, and any unsupported/unsortable type |
-| 1 | `int`, `float` |
-| 2 | `str` |
-| 3 | `dict` (compared key-by-key) |
-| 4 | nested `list` (only when comparing inside another container) |
-| 5 | `bool` |
+Sorting follows **MongoDB's canonical BSON type ordering**, so cross-type comparisons agree with a real server. `bson_types.BSONTypeSpec.sort_rank` assigns:
 
-Arrays compare by their **smallest** member ascending and their **largest** member descending, matching MongoDB. Missing fields sort as `None`, i.e. first ascending. Note that `bool` sorts *after* everything else here — MongoDB's exact BSON ordering differs in the details, so do not rely on cross-type ordering being identical to a real server.
+| Rank | BSON family | Python types |
+|------|-------------|--------------|
+| -1 | MinKey | `bson.MinKey` |
+| 0 | Null | `None`, and missing fields |
+| 1 | Number | `int`, `float`, `Decimal128` |
+| 2 | String | `str` |
+| 3 | Object | `dict` / `Mapping`, compared key-by-key |
+| 4 | Array | `list`, `tuple` |
+| 5 | BinData | `bytes`, `bson.Binary`, `uuid.UUID` |
+| 6 | ObjectId | `bson.ObjectId` |
+| 7 | Boolean | `bool` |
+| 8 | Date | `datetime.datetime` |
+| 9 | Timestamp | `bson.Timestamp` |
+| 10 | Regex | `bson.Regex`, `re.Pattern` |
+| 11 / 12 | JavaScript / with scope | `bson.Code` |
+| 13 | MaxKey | `bson.MaxKey` |
+
+All three numeric representations share rank 1 and compare by **value**, so `1`, `1.0` and `Decimal128("1")` sort together rather than by Python type. `NaN` sorts below every other number. Missing fields sort as null. Arrays compare by their **smallest** member ascending and their **largest** member descending, matching MongoDB; an empty array gets a special field-sort position below null but above MinKey.
+
+`bool` sorts at rank 7, *between* ObjectId and Date — this is MongoDB's real position for it. Older TinyMongo sorted booleans last and silently ignored `datetime` and `ObjectId` sort keys entirely, returning insertion order; both are fixed. Worth knowing if you are comparing against results from an app pinned to an older commit.
 
 ---
 
@@ -875,19 +1066,34 @@ class InsertManyResult:
     acknowledged
 
 class UpdateResult:
-    raw_result       # dict for matched updates, list of ids otherwise
+    raw_result       # PyMongo-shaped command document (see below)
     matched_count
     modified_count
     upserted_id      # None unless an upsert inserted a document
+    did_upsert       # bool
     acknowledged
 
 class DeleteResult:
-    raw_result
+    raw_result       # {'n': <count>, 'ok': 1.0}
     deleted_count
     acknowledged
 ```
 
-`matched_count` / `modified_count` fall back to `len(raw_result)` when not set explicitly, and `deleted_count` is `len(raw_result)` for list results. `acknowledged` is a compatibility constant.
+`raw_result` carries the same keys a real server returns, so code that reads it directly keeps working:
+
+```python
+col.update_one({"v": "x"}, {"$set": {"w": 1}}).raw_result
+# {'n': 1, 'nModified': 1, 'ok': 1.0, 'updatedExisting': True}
+
+col.update_one({"v": "z"}, {"$set": {"w": 1}}, upsert=True).raw_result
+# {'n': 1, 'nModified': 0, 'ok': 1.0, 'updatedExisting': False,
+#  'upserted': ObjectId('6a716df423fad12de69ae6b1')}
+
+col.delete_one({"v": "x"}).raw_result
+# {'n': 1, 'ok': 1.0}
+```
+
+`matched_count` / `modified_count` / `deleted_count` read from that mapping (`n`, `nModified`), falling back to `len(raw_result)` for the legacy list form. `acknowledged` is a compatibility constant.
 
 ---
 
@@ -897,20 +1103,24 @@ class DeleteResult:
 
 When PyMongo is installed, every TinyMongo exception **also inherits from the matching PyMongo class**, so existing `except PyMongoError:` handlers keep working. Without PyMongo, dependency-free stand-ins are used.
 
-```
+```text
 TinyMongoError                     (-> pymongo.errors.PyMongoError)
 ├── ConnectionFailure              (-> pymongo.errors.ConnectionFailure)
 ├── ConfigurationError             (-> pymongo.errors.ConfigurationError)
 ├── OperationFailure               (-> pymongo.errors.OperationFailure)
-│   ├── CursorNotFound
-│   └── WriteError
+│   ├── CursorNotFound             (-> pymongo.errors.CursorNotFound)
+│   ├── BulkWriteError             (-> pymongo.errors.BulkWriteError)
+│   └── WriteError                 (-> pymongo.errors.WriteError)
 │       └── DuplicateKeyError      (-> pymongo.errors.DuplicateKeyError)
 ├── InvalidOperation               (-> pymongo.errors.InvalidOperation)
+├── InvalidDocument                (-> pymongo.errors.InvalidDocument)
 ├── TinyMongoNotSupportedError     (also a NotImplementedError)
 └── StorageError
     ├── StorageCorruptionError
     └── LockError
 ```
+
+**Error codes are MongoDB's**, not placeholders or `None` — `DuplicateKeyError.code` is `11000`, an index name collision is `86`, and a `$pull` predicate refusal is `2`. Code-dispatching handlers (`if exc.code == 11000:`) work against both drivers.
 
 ```python
 from pymongo.errors import PyMongoError
@@ -929,9 +1139,13 @@ except PyMongoError as exc:       # catches TinyMongo's DuplicateKeyError
 | `DuplicateKeyError` | Reused `_id`, or a unique index violation. |
 | `OperationFailure` | Projection conflicts, incompatible index redefinition, dropping `_id_`, unique on `_id`. |
 | `InvalidOperation` | Using a closed client or cursor. |
-| `TinyMongoNotSupportedError` | Sessions, aggregation, bulk writes, change streams, DB commands, unsupported index/projection features. |
+| `TinyMongoNotSupportedError` | Sessions, bulk writes, change streams, DB commands, **unsupported query operators**, unsupported update operators, aggregation stages outside the subset, unsupported index/projection features. |
+| `BulkWriteError` | Per-document failures during `insert_many(ordered=False)`. `.details` carries `nInserted` and a `writeErrors` list. |
+| `InvalidDocument` | A value the storage codec cannot encode. Names the batch index, `_id`, and the offending path. |
+| `ConfigurationError` | An unknown option name passed to `MongoClient`. |
+| `WriteError` | `$push`/`$pull`/`$addToSet` against a non-array field, and `$pull` predicates outside the supported set. |
 | `StorageCorruptionError` | An existing database file cannot be decoded. |
-| `ValueError` | Non-operator update documents, unknown update operators, bad sort specs, unknown backends. |
+| `ValueError` | Non-operator update documents, bad sort specs, unknown backends. Unknown *update operators* now raise `TinyMongoNotSupportedError` instead. |
 
 ---
 
@@ -1017,7 +1231,7 @@ await col.estimated_document_count()   await col.distinct(key, filter=None)
 await col.create_index(...)            await col.create_indexes(...)
 await col.drop_index(...)              await col.list_indexes()   -> AsyncTinyMongoCursor
 await col.index_information()          await col.drop(...)
-await col.aggregate(...)               # raises TinyMongoNotSupportedError
+await col.aggregate(...)               -> AsyncTinyMongoCursor (supported subset)
 await col.bulk_write(...)              # raises TinyMongoNotSupportedError
 await col.watch(...)                   # raises TinyMongoNotSupportedError
 col.with_options(...)                  # sync; returns self
@@ -1135,7 +1349,7 @@ client = TinyMongoClient(
 )
 ```
 
-Recognized URI schemes: `s3`, `gs`, `gcs`, `az`, `azure`, `abfs`, `abfss`. This is **experimental in 1.2.0** and uses one Parquet file per collection, so updates and deletes rewrite that whole file. `capabilities()["multiprocess_writes"]` is `False` in this mode.
+Recognized URI schemes: `s3`, `gs`, `gcs`, `az`, `azure`, `abfs`, `abfss`. This is **experimental** and uses one Parquet file per collection, so updates and deletes rewrite that whole file. `capabilities()["multiprocess_writes"]` is `False` in this mode.
 
 ### Remote SQL Backends
 
@@ -1218,12 +1432,26 @@ async def test_async_code():
 
 **Source:** `tinymongo/bson_codec.py`
 
-Storage stays plain JSON. Values JSON cannot represent are tagged at the persistence boundary and restored on read, so callers keep working with the original Python objects.
+Storage stays plain JSON. Values JSON cannot represent are tagged at the persistence boundary and restored on read, so callers keep working with the original Python objects. The tag is `{"__tinymongo_type_v1__": "<kind>", "value": ...}`.
 
-| Type | Requirement | Storage form |
-|------|-------------|--------------|
-| `datetime` | none | `{"__tinymongo_type_v1__": "datetime", "value": "<isoformat>"}` |
-| `bson.ObjectId` | `pip install "tinymongo[bson]"` | `{"__tinymongo_type_v1__": "objectid", "value": "<hex>"}` |
+| Type | Requirement | Storage tag | Round trip |
+|------|-------------|-------------|------------|
+| `datetime.datetime` | none | `datetime` | exact |
+| `uuid.UUID` | none | `uuid` | exact |
+| `bytes` | none | `binary` | exact |
+| `bson.ObjectId` | `tinymongo[bson]` | `objectid` | exact |
+| `bson.Decimal128` | `tinymongo[bson]` | `decimal128` | exact |
+| `bson.MinKey` / `bson.MaxKey` | `tinymongo[bson]` | `minkey` / `maxkey` | exact |
+| `bson.Timestamp` | `tinymongo[bson]` | `timestamp` | exact |
+| `bson.Code` | `tinymongo[bson]` | `code` | exact (scope preserved) |
+| `bson.Regex` | `tinymongo[bson]` | `regex` | exact |
+| `bson.Binary` | `tinymongo[bson]` | `binary` | **returns `bytes`** — the subtype is not preserved |
+| `re.compile(...)` | none | `regex` | **returns `re.Pattern`**, where MongoDB returns `bson.Regex` |
+| `bson.Int64` | `tinymongo[bson]` | number | **returns `int`** |
+
+The last three are the only inexact ones, and only the first matters much. If you need a stable type on read, store `bson.Regex` explicitly rather than `re.compile`, and do not rely on a `Binary` subtype surviving.
+
+Non-finite floats (`nan`, `inf`, `-inf`) are tagged too, so they survive a JSON round trip that would otherwise corrupt them.
 
 ```python
 from datetime import datetime
@@ -1277,7 +1505,7 @@ tinymongo migrate SOURCE TARGET --to-backend B [--from-backend B]
 |---------|----------|
 | `inspect` | Prints JSON with every database, its collections, and document counts. |
 | `list-dbs` | One database name per line. |
-| `list-collections` | One collection name per line (uses `collection_names()`, so `_default` may appear). |
+| `list-collections` | One collection name per line (uses `collection_names()`). |
 | `export` | Writes a JSON array of documents. `-o -` (the default) writes to stdout. |
 | `import` | Reads a JSON array; `--mode replace` clears the collection first, `append` (default) adds. Input `-` reads stdin. Non-array or non-object input exits with an error. |
 | `migrate` | Copies every collection (or just `--database NAME`) between backends, **replacing** target collections, then prints a JSON summary. |
@@ -1312,23 +1540,24 @@ tinymongo migrate ./tinydb ./unused --to-backend postgres --target-dsn "$TINYMON
 
 Ranked roughly by how likely each one is to bite.
 
-1. **Unknown query operators match nothing and raise nothing.** `$size`, `$type`, `$elemMatch`, `$mod`, `$where`, `$expr`, `$text` all return an empty result set. There is no error to catch.
+1. **`replace_one(upsert=True)` throws away an `_id` pinned by its own filter** and mints a fresh `ObjectId`, silently. The document becomes unreachable by the key you chose. Use `update_one({"_id": X}, {"$set": ...}, upsert=True)` instead, which is correct.
 2. **`$unset` does not remove fields on the `tinydb`/`json` and `memory` backends** even though `modified_count` reports success. Use `replace_one` or a table-native backend.
 3. **Misspelled collection methods do not raise `AttributeError`.** `TinyMongoCollection.__getattr__` returns `self`, so a typo surfaces later as `TypeError: 'TinyMongoCollection' object is not callable`.
 4. **`find()`'s second positional argument is the projection**, not sort. Code written against older TinyMongo that passed a sort spec there is now silently wrong (or raises a projection error).
-5. **Generated `_id` values are 32-char UUID hex strings, not `ObjectId`s.** Code doing `ObjectId(doc["_id"])` will fail.
-6. **`insert_one`/`insert_many` mutate the dicts you pass in**, adding `_id`.
-7. **No aggregation, no bulk writes, no transactions, no change streams, no GridFS.** `TinyGridFS` exists but is an empty stub.
+5. **`insert_one`/`insert_many` mutate the dicts you pass in**, adding `_id`.
+6. **`$pull` refuses part of its predicate surface** — `$exists`, `$type`, `$ne`, `$mod`, `$all`, `$size`, field-level `$not`, `$expr` all raise `WriteError` code `2`.
+7. **No bulk writes, no transactions, no change streams, no GridFS.** `TinyGridFS` exists but is an empty stub. Aggregation *is* supported, but only the documented subset.
 8. **`cursor.count()` ignores `with_limit_and_skip`** — skip and limit are always applied.
-9. **Cursors are eager and in-memory.** `find()` materializes results; there is no server-side streaming and no memory protection on large collections.
-10. **`collection_names()` includes TinyDB's `_default` table**; `list_collection_names()` does not. Prefer the latter.
-11. **Only single-field ascending indexes are real.** `create_index` rejects anything else outright; `create_indexes` degrades it with a warning — a "compound unique" index you asked for may not exist as you expect (and unique + compound is rejected outright).
-12. **A unique index on a field several documents lack raises `DuplicateKeyError`**, because missing and `null` share one token.
-13. **`update()` (legacy) calls `update_many` for a dict update**, not `update_one`.
-14. **Errors are not always PyMongo-shaped.** Invalid update documents raise `ValueError`, not `WriteError`.
-15. **Cross-type sort ordering approximates but does not match BSON ordering** — notably, booleans sort last.
-16. **`server_info()` returns TinyMongo metadata**, not MongoDB version info.
+9. **`db.command` implements only `ping` and `buildInfo`**, and `buildInfo` reports a fictional `8.0.0` so version-gating ODMs proceed. Check the `tinymongo: True` flag if that matters.
+10. **Only single-field ascending indexes are real.** `create_index` rejects anything else outright; `create_indexes` degrades it with a warning — a "compound unique" index you asked for may not exist as you expect (and unique + compound is rejected outright).
+11. **A unique index on a field several documents lack raises `DuplicateKeyError`**, because missing and `null` share one token.
+12. **`update()` (legacy) calls `update_many` for a dict update**, not `update_one`.
+13. **A non-operator update document still raises a plain `ValueError`**, not `WriteError`. Most other failures are now PyMongo-shaped with real MongoDB codes, but this one is not.
+14. **`bson.Binary` reads back as `bytes` and `re.compile` as `re.Pattern`**, losing the subtype and the `bson.Regex` type respectively.
+15. **`server_info()` returns TinyMongo metadata**, not MongoDB version info.
+16. **`supports()` is truthy for every structured capability.** `supports("aggregation")` is always `True`; check `capabilities()["aggregation"]["stages"]` for a specific stage.
 17. **`tinydb<4` is pinned.** TinyMongo will not work with TinyDB 4.x.
+18. **PyPI is far behind `master`.** Everything documented here needs a git pin; the published wheel has no async client.
 
 ---
 
@@ -1352,11 +1581,21 @@ users = client.app.users        # identical from here on, within the supported s
 Guard anything outside the subset with `capabilities()`:
 
 ```python
-if getattr(client, "capabilities", None) and not client.supports("aggregation"):
-    totals = compute_totals_in_python(users.find({}))
-else:
+def stages_available(client, needed):
+    caps = getattr(client, "capabilities", None)
+    if caps is None:
+        return True                       # real PyMongo: everything is available
+    supported = caps()["aggregation"]["stages"]
+    return all(stage in supported for stage in needed)
+
+
+if stages_available(client, {"$match", "$group"}):
     totals = list(users.aggregate(PIPELINE))
+else:
+    totals = compute_totals_in_python(users.find({}))
 ```
+
+Do **not** write `client.supports("aggregation")` here: it is `True` on every backend because the value is a non-empty dict, so the fallback would never run.
 
 ### Isolated per-test database
 

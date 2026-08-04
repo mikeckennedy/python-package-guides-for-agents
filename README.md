@@ -56,7 +56,7 @@ The guides live in your repo alongside your code, so your agent always has them 
 | [markdown2](package-guides/markdown2_reference.md) | latest | ~970 | Fast, complete Python Markdown-to-HTML converter with 30+ extras |
 | [Bulma](package-guides/bulma_reference.md) | 1.0.4 | ~1,510 | Modern CSS framework based on Flexbox with built-in dark mode and theming |
 | [EasyMDE](package-guides/easymde_reference.md) | 2.21.0 | ~820 | Embeddable JavaScript Markdown editor — drop-in textarea replacement for web app forms |
-| [TinyMongo](package-guides/tinymongo_reference.md) | 1.2.0 | ~1,490 | Embedded MongoDB-compatible database — PyMongo-shaped sync and async API over TinyDB, SQLite, DuckDB, Parquet, and remote SQL backends |
+| [TinyMongo](package-guides/tinymongo_reference.md) | 1.3.0 (`master` @ `0a4c549`) | ~1,725 | Embedded MongoDB-compatible database — PyMongo-shaped sync and async API over TinyDB, SQLite, DuckDB, Parquet, and remote SQL backends |
 
 
 ### Claude Code
